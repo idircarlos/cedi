@@ -1,2 +1,2 @@
 cedi: cedi.c
-	$(CC) cedi.c -o cedi -Wall -Wextra -pedantic -std=c99
+	$(CC) cedi.c editor.c common.c -o cedi -Wall -Wextra -pedantic -std=c99
