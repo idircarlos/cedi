@@ -21,6 +21,7 @@
 void editorInit(Editor *e) {
     e->cx = 0;
     e->cy = 0;
+    e->rx = 0;
     e->rowoff = 0;
     e->coloff = 0;
     e->nrows = 0;
@@ -107,20 +108,33 @@ int getWindowSize(int *rows, int *cols) {
 }
 
 void editorMoveCursor(Editor *e, int key) {
+    Line *line = (e->cy >= e->nrows) ? NULL : &e->lines[e->cy];
     switch (key) {
         case K_LEFT:
             if (e->cx > 0) e->cx--;
+            else if (e->cy > 0) {
+                e->cy--;
+                e->cx = e->lines[e->cy].len;
+            }
             break;
         case K_RIGHT:
-            e->cx++;
+            if (line && e->cx < line->len) e->cx++;
+            else if (line && e->cx == line->len) {
+                e->cy++;
+                e->cx = 0;
+            }
             break;
         case K_UP:
-            if (e->cy > 0) e->cy--;
+            if (e->cy != 0) e->cy--;
             break;
         case K_DOWN:
             if (e->cy < e->nrows) e->cy++;
             break;
-        }
+    }
+
+    line = (e->cy >= e->nrows) ? NULL : &e->lines[e->cy];
+    int linelen = line ? line->len : 0;
+    if (e->cx > linelen) e->cx = linelen;
 }
 
 void editorProcessKeypress(Editor *e) {
@@ -136,10 +150,18 @@ void editorProcessKeypress(Editor *e) {
             e->cx = 0;
             break;
         case K_END:
-            e->cx = e->screencols - 1;
+            if (e->cy < e->nrows) e->cx = e->lines[e->cy].len;
             break;
         case K_PAGE_UP:
-        case K_PAGE_DOWN: {
+        case K_PAGE_DOWN:
+            {
+                if (c == K_PAGE_UP) {
+                    e->cy = e->rowoff;
+                } 
+                else if (c == K_PAGE_DOWN) {
+                    e->cy = e->rowoff + e->screenrows - 1;
+                    if (e->cy > e->nrows) e->cy = e->nrows;
+                }
                 int times = e->screenrows;
                 while (times--) editorMoveCursor(e, c == K_PAGE_UP ? K_UP : K_DOWN);
             }
@@ -149,6 +171,7 @@ void editorProcessKeypress(Editor *e) {
         case K_LEFT:
         case K_RIGHT:
             editorMoveCursor(e, c);
+            break;
         default:
             break;
     }
@@ -176,10 +199,10 @@ void editorDrawRows(Editor *e, ABuf *ab) {
             }
         }
         else {
-            int len = e->lines[fileline].len - e->coloff;
+            int len = e->lines[fileline].rlen - e->coloff;
             if (len < 0) len = 0;
             if (len > e->screencols) len = e->screencols;
-            abAppend(ab, &e->lines[fileline].chars[e->coloff], len);
+            abAppend(ab, &e->lines[fileline].render[e->coloff], len);
         }
         abAppend(ab, "\x1b[K", 3);
         if (y < e->screenrows - 1) {
@@ -198,7 +221,7 @@ void editorRefreshScreen(Editor *e) {
     editorDrawRows(e, &ab);
 
     char buf[32];
-    snprintf(buf, sizeof(buf), "\x1b[%d;%dH", (e->cy - e->rowoff) + 1, (e->cx - e->coloff) + 1);
+    snprintf(buf, sizeof(buf), "\x1b[%d;%dH", (e->cy - e->rowoff) + 1, (e->rx - e->coloff) + 1);
     abAppend(&ab, buf, strlen(buf));
 
     abAppend(&ab, "\x1b[?25h", 6);  // Restores the visibility of the cursor
@@ -229,21 +252,63 @@ void editorAppendRow(Editor *e, char *s, size_t len) {
     memcpy(e->lines[at].chars, s, len);
     e->lines[at].chars[len] = '\0';
     e->nrows++;
+
+    e->lines[at].rlen = 0;
+    e->lines[at].render = NULL;
+    editorUpdateRow(e, &e->lines[at]);
+}
+
+void editorUpdateRow(Editor *e, Line *line) {
+    (void) e;
+    int tabs = 0;
+    int j;
+    for (j = 0; j < line->len; j++)
+        if (line->chars[j] == '\t') tabs++;
+
+    free(line->render);
+    line->render = malloc(line->len + tabs*(CEDI_TAB_STOP - 1) + 1);
+    int idx = 0;
+    for (j = 0; j < line->len; j++) {
+        if (line->chars[j] == '\t') {
+            line->render[idx++] = ' ';
+            while (idx % CEDI_TAB_STOP != 0) line->render[idx++] = ' ';
+        } else {
+            line->render[idx++] = line->chars[j];
+        }
+    }
+    line->render[idx] = '\0';
+    line->rlen = idx;
 }
 
 void editorScroll(Editor *e) {
+    e->rx = 0;
+    if (e->cy < e->nrows) {
+        e->rx = editorRowCxToRx(e, &e->lines[e->cy], e->cx);
+    }
     if (e->cy < e->rowoff) {
         e->rowoff = e->cy;
     }
     if (e->cy >= e->rowoff + e->screenrows) {
         e->rowoff = e->cy - e->screenrows + 1;
     }
-    if (e->cx < e->coloff) {
-        e->coloff = e->cx;
+    if (e->rx < e->coloff) {
+        e->coloff = e->rx;
     }
-    if (e->cx >= e->coloff + e->screencols) {
-        e->coloff = e->cx - e->screencols + 1;
+    if (e->rx >= e->coloff + e->screencols) {
+        e->coloff = e->rx - e->screencols + 1;
     }
+}
+
+int editorRowCxToRx(Editor *e, Line *line, int cx) {
+    (void) e;
+    int rx = 0;
+    int j;
+    for (j = 0; j < cx; j++) {
+        if (line->chars[j] == '\t')
+            rx += (CEDI_TAB_STOP - 1) - (rx % CEDI_TAB_STOP);
+        rx++;
+    }
+    return rx;
 }
 
 void abAppend(ABuf *ab, const char *s, int len) {

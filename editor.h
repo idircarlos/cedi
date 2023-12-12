@@ -16,18 +16,20 @@ typedef enum {
 typedef struct {
     char *chars;
     int len;
+    char *render;
+    int rlen;
 } Line;
 
 typedef struct {
-    int cx;
-    int cy;
-    int rowoff;
-    int coloff;
-    int screenrows;
-    int screencols;
-    Line *lines;
-    int nrows;
-    struct termios orig_termios;
+    int cx, cy;     // Cursor x,y
+    int rx;         // Cursor render x
+    int rowoff;     // Row offset for scroll
+    int coloff;     // Col offset for scroll
+    int screenrows; // Editor rows
+    int screencols; // Editor cols
+    Line *lines;    // Lines of the editor
+    int nrows;      // Number of lines
+    struct termios orig_termios;    // Termios status
 } Editor;
 
 typedef struct {
@@ -45,7 +47,10 @@ void editorOpen(Editor *e, const char *filename);
 int getWindowSize(int *rows, int *cols);
 int getCursorPosition(int *rows, int *cols);
 void editorAppendRow(Editor *e, char *s, size_t len);
+void editorUpdateRow(Editor *e, Line *line);
 void editorScroll(Editor *e);
+int editorRowCxToRx(Editor *e, Line *line, int cx);
+
 void abAppend(ABuf *ab, const char *s, int len);
 void abFree(ABuf *ab);
 
