@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/ioctl.h>
+#include <sys/types.h>
 #include <termios.h>
 #include <unistd.h>
 #include <ctype.h>
@@ -13,9 +14,17 @@
 #define CTRL_KEY(k) ((k) & 0x1f)
 #define ABUF_INIT {NULL, 0}
 
+#define _DEFAULT_SOURCE
+#define _BSD_SOURCE
+#define _GNU_SOURCE
+
 void editorInit(Editor *e) {
     e->cx = 0;
     e->cy = 0;
+    e->rowoff = 0;
+    e->coloff = 0;
+    e->nrows = 0;
+    e->lines = NULL;
     if (getWindowSize(&e->screenrows,  &e->screencols) == -1) DIE("getWindowSize");
 }
 
@@ -103,13 +112,13 @@ void editorMoveCursor(Editor *e, int key) {
             if (e->cx > 0) e->cx--;
             break;
         case K_RIGHT:
-            if (e->cx < e->screencols - 1) e->cx++;
+            e->cx++;
             break;
         case K_UP:
             if (e->cy > 0) e->cy--;
             break;
         case K_DOWN:
-            if (e->cy < e->screenrows - 1) e->cy++;
+            if (e->cy < e->nrows) e->cy++;
             break;
         }
 }
@@ -148,20 +157,29 @@ void editorProcessKeypress(Editor *e) {
 void editorDrawRows(Editor *e, ABuf *ab) {
     int y;
     for (y = 0; y < e->screenrows; y++) {
-        if (y == e->screenrows / 3) {
-            char welcome[80];
-            int welcomelen = snprintf(welcome, sizeof(welcome), "Cedi editor -- version %s", CEDI_VERSION);
-            if (welcomelen > e->screencols) welcomelen = e->screencols;
-            int padding = (e->screencols - welcomelen) / 2;
-            if (padding) {
-                abAppend(ab, "~", 1);
-                padding--;
+        int fileline = y + e->rowoff;
+        if (fileline >= e->nrows) {
+            if (e->nrows == 0 && y == e->screenrows / 3) {
+                char welcome[80];
+                int welcomelen = snprintf(welcome, sizeof(welcome), "Cedi editor -- version %s", CEDI_VERSION);
+                if (welcomelen > e->screencols) welcomelen = e->screencols;
+                int padding = (e->screencols - welcomelen) / 2;
+                if (padding) {
+                    abAppend(ab, "~", 1);
+                    padding--;
+                }
+                while (padding--) abAppend(ab, " ", 1);
+                abAppend(ab, welcome, welcomelen);
             }
-            while (padding--) abAppend(ab, " ", 1);
-            abAppend(ab, welcome, welcomelen);
+            else {
+                abAppend(ab, "~", 1);
+            }
         }
         else {
-            abAppend(ab, "~", 1);
+            int len = e->lines[fileline].len - e->coloff;
+            if (len < 0) len = 0;
+            if (len > e->screencols) len = e->screencols;
+            abAppend(ab, &e->lines[fileline].chars[e->coloff], len);
         }
         abAppend(ab, "\x1b[K", 3);
         if (y < e->screenrows - 1) {
@@ -171,6 +189,8 @@ void editorDrawRows(Editor *e, ABuf *ab) {
 }
 
 void editorRefreshScreen(Editor *e) {
+    editorScroll(e);
+
     ABuf ab = ABUF_INIT;
     abAppend(&ab, "\x1b[?25l", 6);  // Hides the cursor while repainting
     abAppend(&ab, "\x1b[H", 3);     // Reposition the cursor to top left
@@ -178,13 +198,52 @@ void editorRefreshScreen(Editor *e) {
     editorDrawRows(e, &ab);
 
     char buf[32];
-    snprintf(buf, sizeof(buf), "\x1b[%d;%dH", e->cy + 1, e->cx + 1);
+    snprintf(buf, sizeof(buf), "\x1b[%d;%dH", (e->cy - e->rowoff) + 1, (e->cx - e->coloff) + 1);
     abAppend(&ab, buf, strlen(buf));
 
     abAppend(&ab, "\x1b[?25h", 6);  // Restores the visibility of the cursor
     
     write(STDOUT_FILENO, ab.b, ab.len);
     abFree(&ab);
+}
+
+void editorOpen(Editor *e, const char * filename) {
+    FILE *fd = fopen(filename, "r");
+    if (!fd) DIE("fopen");
+    char *line = NULL;
+    size_t linecap = 0;
+    ssize_t linelen;
+    while ((linelen = getline(&line, &linecap, fd)) != -1) {
+        while (linelen > 0 && (line[linelen - 1] == '\n' || line[linelen - 1] == '\r')) linelen--;
+        editorAppendRow(e, line, linelen);
+    }
+    free(line);
+    fclose(fd);
+}
+
+void editorAppendRow(Editor *e, char *s, size_t len) {
+    e->lines = realloc(e->lines, sizeof(Line) * (e->nrows + 1));
+    int at = e->nrows;
+    e->lines[at].len = len;
+    e->lines[at].chars = malloc(len + 1);
+    memcpy(e->lines[at].chars, s, len);
+    e->lines[at].chars[len] = '\0';
+    e->nrows++;
+}
+
+void editorScroll(Editor *e) {
+    if (e->cy < e->rowoff) {
+        e->rowoff = e->cy;
+    }
+    if (e->cy >= e->rowoff + e->screenrows) {
+        e->rowoff = e->cy - e->screenrows + 1;
+    }
+    if (e->cx < e->coloff) {
+        e->coloff = e->cx;
+    }
+    if (e->cx >= e->coloff + e->screencols) {
+        e->coloff = e->cx - e->screencols + 1;
+    }
 }
 
 void abAppend(ABuf *ab, const char *s, int len) {

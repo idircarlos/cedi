@@ -33,7 +33,9 @@ int main(int argc, char *argv[]) {
 
     enableRawMode();
     editorInit(&E);
-
+    if (argc == 2) {
+        editorOpen(&E, argv[1]);
+    }
     while (1) {
         editorRefreshScreen(&E);
         editorProcessKeypress(&E);
