@@ -1,9 +1,15 @@
+#define _DEFAULT_SOURCE
+#define _BSD_SOURCE
+#define _GNU_SOURCE
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <stdarg.h>
 #include <sys/ioctl.h>
 #include <sys/types.h>
 #include <termios.h>
+#include <time.h>
 #include <unistd.h>
 #include <ctype.h>
 #include <errno.h>
@@ -14,9 +20,6 @@
 #define CTRL_KEY(k) ((k) & 0x1f)
 #define ABUF_INIT {NULL, 0}
 
-#define _DEFAULT_SOURCE
-#define _BSD_SOURCE
-#define _GNU_SOURCE
 
 void editorInit(Editor *e) {
     e->cx = 0;
@@ -26,7 +29,11 @@ void editorInit(Editor *e) {
     e->coloff = 0;
     e->nrows = 0;
     e->lines = NULL;
+    e->filename = NULL;
+    e->statusmsg[0] = '\0';
+    e->statusmsg_time = 0;
     if (getWindowSize(&e->screenrows,  &e->screencols) == -1) DIE("getWindowSize");
+    e->screenrows -= 2; // Reserve two lines for the status bars
 }
 
 int editorReadKey(Editor *e) {
@@ -205,10 +212,38 @@ void editorDrawRows(Editor *e, ABuf *ab) {
             abAppend(ab, &e->lines[fileline].render[e->coloff], len);
         }
         abAppend(ab, "\x1b[K", 3);
-        if (y < e->screenrows - 1) {
-            abAppend(ab, "\r\n", 2);
+        abAppend(ab, "\r\n", 2);
+    }
+}
+
+void editorDrawStatusBar(Editor *e, ABuf *ab) {
+    abAppend(ab, "\x1b[7m", 4);     // Invert term colors
+    char status[80];
+    char rstatus[80];
+    int len = snprintf(status, sizeof(status), "%.20s - %d lines", e->filename ? e->filename : "[No Name]", e->nrows);
+    int rlen = snprintf(rstatus, sizeof(rstatus), "%d/%d", e->cy + 1, e->nrows);
+    if (len > e->screencols) len = e->screencols;
+    abAppend(ab, status, len);
+    while (len < e->screencols) {
+        if (e->screencols - len == rlen) {            
+            abAppend(ab, rstatus, rlen);
+            break;
+        }
+        else {
+            abAppend(ab, " ", 1);
+            len++;
         }
     }
+    abAppend(ab, "\x1b[m", 3);      // Revert colors to normal state
+    abAppend(ab, "\r\n", 2);
+}
+
+void editorDrawMessageBar(Editor *e, ABuf *ab) {
+    abAppend(ab, "\x1b[K", 3);
+    int msglen = strlen(e->statusmsg);
+    if (msglen > e->screencols) msglen = e->screencols;
+    if (msglen && time(NULL) - e->statusmsg_time < 5)
+    abAppend(ab, e->statusmsg, msglen);
 }
 
 void editorRefreshScreen(Editor *e) {
@@ -219,6 +254,8 @@ void editorRefreshScreen(Editor *e) {
     abAppend(&ab, "\x1b[H", 3);     // Reposition the cursor to top left
     
     editorDrawRows(e, &ab);
+    editorDrawStatusBar(e, &ab);
+    editorDrawMessageBar(e, &ab);
 
     char buf[32];
     snprintf(buf, sizeof(buf), "\x1b[%d;%dH", (e->cy - e->rowoff) + 1, (e->rx - e->coloff) + 1);
@@ -230,7 +267,17 @@ void editorRefreshScreen(Editor *e) {
     abFree(&ab);
 }
 
-void editorOpen(Editor *e, const char * filename) {
+void editorSetStatusMessage(Editor *e, const char *fmt, ...) {
+    va_list ap;
+    va_start(ap, fmt);
+    vsnprintf(e->statusmsg, sizeof(e->statusmsg), fmt, ap);
+    va_end(ap);
+    e->statusmsg_time = time(NULL);
+}
+
+void editorOpen(Editor *e, const char *filename) {
+    free(e->filename);
+    e->filename = strdup(filename);
     FILE *fd = fopen(filename, "r");
     if (!fd) DIE("fopen");
     char *line = NULL;

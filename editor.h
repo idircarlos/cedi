@@ -29,6 +29,9 @@ typedef struct {
     int screencols; // Editor cols
     Line *lines;    // Lines of the editor
     int nrows;      // Number of lines
+    char *filename; // File name
+    char statusmsg[80];
+    time_t statusmsg_time;
     struct termios orig_termios;    // Termios status
 } Editor;
 
@@ -42,7 +45,9 @@ int editorReadKey(Editor *e);
 void editorMoveCursor(Editor *e, int key);
 void editorProcessKeypress(Editor *e);
 void editorDrawRows(Editor *e, ABuf *ab);
+void editorDrawStatusBar(Editor *e, ABuf *ab);
 void editorRefreshScreen(Editor *e);
+void editorSetStatusMessage(Editor *e, const char *fmt, ...);
 void editorOpen(Editor *e, const char *filename);
 int getWindowSize(int *rows, int *cols);
 int getCursorPosition(int *rows, int *cols);
