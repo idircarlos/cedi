@@ -2,6 +2,7 @@
 #define EDITOR_H_
 
 typedef enum {
+    K_BACKSPACE = 127,
     K_LEFT = 1000,
     K_RIGHT,
     K_UP,
@@ -48,11 +49,15 @@ void editorDrawRows(Editor *e, ABuf *ab);
 void editorDrawStatusBar(Editor *e, ABuf *ab);
 void editorRefreshScreen(Editor *e);
 void editorSetStatusMessage(Editor *e, const char *fmt, ...);
+char *editorRowsToString(Editor *e, int *buflen);
 void editorOpen(Editor *e, const char *filename);
+void editorSave(Editor *e);
 int getWindowSize(int *rows, int *cols);
 int getCursorPosition(int *rows, int *cols);
 void editorAppendRow(Editor *e, char *s, size_t len);
 void editorUpdateRow(Editor *e, Line *line);
+void editorInsertChar(Editor *e, int c);
+void editorRowInsertChar(Editor *e, Line *line, int at, int c);
 void editorScroll(Editor *e);
 int editorRowCxToRx(Editor *e, Line *line, int cx);
 

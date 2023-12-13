@@ -13,6 +13,7 @@
 #include <unistd.h>
 #include <ctype.h>
 #include <errno.h>
+#include <fcntl.h>
 
 #include "editor.h"
 #include "common.h"
@@ -153,11 +154,25 @@ void editorProcessKeypress(Editor *e) {
             exit(0);
             break;
 
+        case CTRL_KEY('s'):
+            editorSave(e);
+            break;
+        
+        case '\r':
+            // TODO:
+            break;
+
         case K_HOME:
             e->cx = 0;
             break;
         case K_END:
             if (e->cy < e->nrows) e->cx = e->lines[e->cy].len;
+            break;
+        
+        case K_BACKSPACE:
+        case CTRL_KEY('h'):
+        case K_DEL:
+            // TODO:
             break;
         case K_PAGE_UP:
         case K_PAGE_DOWN:
@@ -179,7 +194,11 @@ void editorProcessKeypress(Editor *e) {
         case K_RIGHT:
             editorMoveCursor(e, c);
             break;
+        case CTRL_KEY('l'):
+        case '\x1b':
+            break;
         default:
+            editorInsertChar(e, c);
             break;
     }
 }
@@ -275,6 +294,23 @@ void editorSetStatusMessage(Editor *e, const char *fmt, ...) {
     e->statusmsg_time = time(NULL);
 }
 
+char *editorRowsToString(Editor *e, int *buflen) {
+    int totlen = 0;
+    int j;
+    for (j = 0; j < e->nrows; j++)
+        totlen += e->lines[j].len + 1;
+    *buflen = totlen;
+    char *buf = malloc(totlen);
+    char *p = buf;
+    for (j = 0; j < e->nrows; j++) {
+        memcpy(p, e->lines[j].chars, e->lines[j].len);
+        p += e->lines[j].len;
+        *p = '\n';
+        p++;
+    }
+    return buf;
+}
+
 void editorOpen(Editor *e, const char *filename) {
     free(e->filename);
     e->filename = strdup(filename);
@@ -289,6 +325,26 @@ void editorOpen(Editor *e, const char *filename) {
     }
     free(line);
     fclose(fd);
+}
+
+void editorSave(Editor *e) {
+    if (e->filename == NULL) return;
+    int len;
+    char *buf = editorRowsToString(e, &len);
+    int fd = open(e->filename, O_RDWR | O_CREAT, 0644);
+    if (fd != -1) {
+        if (ftruncate(fd, len) != -1) {
+            if (write(fd, buf, len) == len) {
+                close(fd);
+                free(buf);
+                editorSetStatusMessage(e, "%d bytes written to disk", len);
+                return;
+            }
+        }
+        close(fd);
+    }
+    free(buf);
+    editorSetStatusMessage(e, "Can't save! I/O error: %s", strerror(errno));
 }
 
 void editorAppendRow(Editor *e, char *s, size_t len) {
@@ -325,6 +381,23 @@ void editorUpdateRow(Editor *e, Line *line) {
     }
     line->render[idx] = '\0';
     line->rlen = idx;
+}
+
+void editorInsertChar(Editor *e, int c) {
+    if (e->cy == e->nrows) {
+        editorAppendRow(e, "", 0);
+    }
+    editorRowInsertChar(e, &e->lines[e->cy], e->cx, c);
+    e->cx++;
+}
+
+void editorRowInsertChar(Editor *e, Line *line, int at, int c) {
+    if (at < 0 || at > line->len) at = line->len;
+    line->chars = realloc(line->chars, line->len + 2);
+    memmove(&line->chars[at+1], &line->chars[at], line->len - at + 1);
+    line->len++;
+    line->chars[at] = c;
+    editorUpdateRow(e, line);
 }
 
 void editorScroll(Editor *e) {
