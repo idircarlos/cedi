@@ -43,5 +43,6 @@ int main(int argc, char *argv[]) {
         editorRefreshScreen(&E);
         editorProcessKeypress(&E);
     }
+
     return 0;
 }

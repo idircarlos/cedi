@@ -53,6 +53,7 @@ void editorSetStatusMessage(Editor *e, const char *fmt, ...);
 char *editorRowsToString(Editor *e, int *buflen);
 void editorOpen(Editor *e, const char *filename);
 void editorSave(Editor *e);
+void editorFind(Editor *e);
 int getWindowSize(int *rows, int *cols);
 int getCursorPosition(int *rows, int *cols);
 void editorInsertRow(Editor *e, int at, char *s, size_t len);
@@ -67,7 +68,8 @@ void editorRowDelChar(Editor *e, Line *line, int at);
 void editorRowAppendString(Editor *e, Line *line, char *s, size_t len);
 void editorScroll(Editor *e);
 int editorRowCxToRx(Editor *e, Line *line, int cx);
-char *editorPrompt(Editor *e, char *prompt);
+int editorRowRxToCx(Editor *e, Line *line, int rx);
+char *editorPrompt(Editor *e, char *prompt, void (*callback)(Editor *, char *, int));
 
 void abAppend(ABuf *ab, const char *s, int len);
 void abFree(ABuf *ab);
