@@ -243,7 +243,17 @@ void editorDrawRows(Editor *e, ABuf *ab) {
             int len = e->lines[fileline].rlen - e->coloff;
             if (len < 0) len = 0;
             if (len > e->screencols) len = e->screencols;
-            abAppend(ab, &e->lines[fileline].render[e->coloff], len);
+            char *c = &e->lines[fileline].render[e->coloff];
+            int j;
+            for (j = 0; j < len; j++) {
+                if (isdigit((int)c[j])) {
+                    abAppend(ab, "\x1b[31m", 5);
+                    abAppend(ab, &c[j], 1);
+                    abAppend(ab, "\x1b[39m", 5);
+                } else {
+                    abAppend(ab, &c[j], 1);
+                }
+            }
         }
         abAppend(ab, "\x1b[K", 3);
         abAppend(ab, "\r\n", 2);
