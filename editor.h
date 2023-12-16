@@ -30,6 +30,7 @@ typedef struct {
     int screencols; // Editor cols
     Line *lines;    // Lines of the editor
     int nrows;      // Number of lines
+    int dirty;       // Is dirty
     char *filename; // File name
     char statusmsg[80];
     time_t statusmsg_time;
@@ -54,12 +55,19 @@ void editorOpen(Editor *e, const char *filename);
 void editorSave(Editor *e);
 int getWindowSize(int *rows, int *cols);
 int getCursorPosition(int *rows, int *cols);
-void editorAppendRow(Editor *e, char *s, size_t len);
+void editorInsertRow(Editor *e, int at, char *s, size_t len);
+void editorFreeRow(Editor *e, Line *line);
+void editorDelRow(Editor *e, int at);
 void editorUpdateRow(Editor *e, Line *line);
+void editorInsertNewline(Editor *e);
 void editorInsertChar(Editor *e, int c);
 void editorRowInsertChar(Editor *e, Line *line, int at, int c);
+void editorDelChar(Editor *e);
+void editorRowDelChar(Editor *e, Line *line, int at);
+void editorRowAppendString(Editor *e, Line *line, char *s, size_t len);
 void editorScroll(Editor *e);
 int editorRowCxToRx(Editor *e, Line *line, int cx);
+char *editorPrompt(Editor *e, char *prompt);
 
 void abAppend(ABuf *ab, const char *s, int len);
 void abFree(ABuf *ab);

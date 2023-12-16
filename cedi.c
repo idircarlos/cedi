@@ -37,7 +37,7 @@ int main(int argc, char *argv[]) {
         editorOpen(&E, argv[1]);
     }
 
-    editorSetStatusMessage(&E, "HELP: Ctrl-S = save | Ctrl-Q = quit");
+    editorSetStatusMessage(&E, CEDI_DEFAULT_STATUS_MESSAGE);
 
     while (1) {
         editorRefreshScreen(&E);
