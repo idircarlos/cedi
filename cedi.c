@@ -14,6 +14,7 @@ static Editor E = {0};
 void disableRawMode() {
     if (tcsetattr(STDIN_FILENO, TCSAFLUSH, &E.orig_termios) == -1) DIE("tcsetattr");
 }
+
 void enableRawMode() {
     if (tcgetattr(STDIN_FILENO, &E.orig_termios) == -1) DIE("tcgetattr");
     atexit(disableRawMode);

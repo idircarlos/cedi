@@ -19,6 +19,7 @@ typedef struct {
     int len;
     char *render;
     int rlen;
+    unsigned char *hl;  // Highlighting
 } Line;
 
 typedef struct {
@@ -54,8 +55,6 @@ char *editorRowsToString(Editor *e, int *buflen);
 void editorOpen(Editor *e, const char *filename);
 void editorSave(Editor *e);
 void editorFind(Editor *e);
-int getWindowSize(int *rows, int *cols);
-int getCursorPosition(int *rows, int *cols);
 void editorInsertRow(Editor *e, int at, char *s, size_t len);
 void editorFreeRow(Editor *e, Line *line);
 void editorDelRow(Editor *e, int at);
@@ -70,6 +69,10 @@ void editorScroll(Editor *e);
 int editorRowCxToRx(Editor *e, Line *line, int cx);
 int editorRowRxToCx(Editor *e, Line *line, int rx);
 char *editorPrompt(Editor *e, char *prompt, void (*callback)(Editor *, char *, int));
+void editorUpdateSyntax(Editor *e, Line *line);
+
+int getWindowSize(int *rows, int *cols);
+int getCursorPosition(int *rows, int *cols);
 
 void abAppend(ABuf *ab, const char *s, int len);
 void abFree(ABuf *ab);

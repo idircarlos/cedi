@@ -17,6 +17,8 @@
 
 #include "editor.h"
 #include "common.h"
+#include "syntax.h"
+#include "util.h"
 
 #define CTRL_KEY(k) ((k) & 0x1f)
 #define ABUF_INIT {NULL, 0}
@@ -244,16 +246,29 @@ void editorDrawRows(Editor *e, ABuf *ab) {
             if (len < 0) len = 0;
             if (len > e->screencols) len = e->screencols;
             char *c = &e->lines[fileline].render[e->coloff];
+            unsigned char *hl = &e->lines[fileline].hl[e->coloff];
+            int current_color = -1;
             int j;
             for (j = 0; j < len; j++) {
-                if (isdigit((int)c[j])) {
-                    abAppend(ab, "\x1b[31m", 5);
-                    abAppend(ab, &c[j], 1);
-                    abAppend(ab, "\x1b[39m", 5);
-                } else {
+                if (hl[j] == HL_NORMAL) {
+                    if (current_color != -1) {
+                        abAppend(ab, "\x1b[39m", 5);
+                        current_color = -1;
+                    }
                     abAppend(ab, &c[j], 1);
                 }
+                else {
+                    int color = syntaxToColor(hl[j]);
+                    if (color != current_color) {
+                        current_color = color;
+                        char buf[16];
+                        int clen = snprintf(buf, sizeof(buf), "\x1b[%dm", color);
+                        abAppend(ab, buf, clen);
+                    }
+                    abAppend(ab, &c[j], 1);
+                } 
             }
+            abAppend(ab, "\x1b[39m", 5);
         }
         abAppend(ab, "\x1b[K", 3);
         abAppend(ab, "\r\n", 2);
@@ -383,6 +398,16 @@ void editorSave(Editor *e) {
 void editorFindCallback(Editor *e, char *query, int key) {
     static int last_match = -1;
     static int direction = 1;
+
+    static int saved_hl_line;
+    static char *saved_hl = NULL;
+
+    if (saved_hl) {
+        memcpy(e->lines[saved_hl_line].hl, saved_hl, e->lines[saved_hl_line].rlen);
+        free(saved_hl);
+        saved_hl = NULL;
+    }
+
     if (key == '\r' || key == '\x1b') {
         last_match = -1;
         direction = 1;
@@ -412,6 +437,11 @@ void editorFindCallback(Editor *e, char *query, int key) {
             e->cy = current;
             e->cx = editorRowRxToCx(e, line, match - line->render);
             e->rowoff = e->nrows;
+
+            saved_hl_line = current;
+            saved_hl = malloc(line->rlen);
+            memcpy(saved_hl, line->hl, line->rlen);
+            memset(&line->hl[match - line->render], HL_MATCH, strlen(query));
             break;
         }
     }
@@ -447,6 +477,7 @@ void editorInsertRow(Editor *e, int at, char *s, size_t len) {
 
     e->lines[at].rlen = 0;
     e->lines[at].render = NULL;
+    e->lines[at].hl = NULL;
     editorUpdateRow(e, &e->lines[at]);
 
     e->nrows++;
@@ -457,6 +488,7 @@ void editorFreeRow(Editor *e, Line *line) {
     (void) e;
     free(line->chars);
     free(line->render);
+    free(line->hl);
 }
 
 void editorDelRow(Editor *e, int at) {
@@ -487,6 +519,7 @@ void editorUpdateRow(Editor *e, Line *line) {
     }
     line->render[idx] = '\0';
     line->rlen = idx;
+    editorUpdateSyntax(e, line);
 }
 
 void editorInsertNewline(Editor *e) {
@@ -634,6 +667,26 @@ char *editorPrompt(Editor *e, char *prompt, void (*callback)(Editor *, char *, i
             buf[buflen] = '\0';
         }
         if (callback) callback(e, buf, c);
+    }
+}
+
+void editorUpdateSyntax(Editor *e, Line *line) {
+    (void) e;
+    line->hl = realloc(line->hl, line->rlen);
+    memset(line->hl, HL_NORMAL, line->rlen);    // Default values for the entire line
+    int prev_sep = 1;
+    int i = 0;
+    while (i < line->rlen) {
+        char c = line->render[i];
+        unsigned char prev_hl = (i > 0) ? line->hl[i - 1] : HL_NORMAL;
+        if ((isdigit(c) && (prev_sep || prev_hl == HL_NUMBER)) || (c == '.' && prev_hl == HL_NUMBER)) {
+            line->hl[i] = HL_NUMBER;
+            i++;
+            prev_sep = 0;
+            continue;
+        }
+        prev_sep = isSeparator(c);
+        i++;
     }
 }
 
