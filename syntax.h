@@ -31,6 +31,6 @@ typedef struct {
 
 int syntaxToColor(int hl);
 int syntaxGetFlag(EditorSyntax *syntax, SyntaxHLFlag flag);
-EditorSyntax *syntaxFindHighlight(const char *fileExtension);
+EditorSyntax *syntaxFindHighlight(const char *filename);
 
 #endif // SYNTAX_H_
