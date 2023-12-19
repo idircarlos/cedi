@@ -16,8 +16,6 @@
 #include <fcntl.h>
 
 #include "editor.h"
-#include "common.h"
-#include "syntax.h"
 #include "util.h"
 
 #define CTRL_KEY(k) ((k) & 0x1f)
@@ -37,6 +35,7 @@ void editorInit(Editor *e) {
     e->filename = NULL;
     e->statusmsg[0] = '\0';
     e->statusmsg_time = 0;
+    e->syntax = NULL;
     if (getWindowSize(&e->screenrows,  &e->screencols) == -1) DIE("getWindowSize");
     e->screenrows -= 2; // Reserve two lines for the status bars
 }
@@ -280,7 +279,7 @@ void editorDrawStatusBar(Editor *e, ABuf *ab) {
     char status[80];
     char rstatus[80];
     int len = snprintf(status, sizeof(status), "%.20s - %d lines %s", e->filename ? e->filename : "[No Name]", e->nrows, e->dirty ? "(modified)" : "");
-    int rlen = snprintf(rstatus, sizeof(rstatus), "%d/%d", e->cy + 1, e->nrows);
+    int rlen = snprintf(rstatus, sizeof(rstatus), "%s | %d/%d", e->syntax ? e->syntax->filetype : "no ft", e->cy + 1, e->nrows);
     if (len > e->screencols) len = e->screencols;
     abAppend(ab, status, len);
     while (len < e->screencols) {
@@ -354,6 +353,7 @@ char *editorRowsToString(Editor *e, int *buflen) {
 void editorOpen(Editor *e, const char *filename) {
     free(e->filename);
     e->filename = strdup(filename);
+    editorSelectSyntaxHighlight(e);
     FILE *fd = fopen(filename, "r");
     if (!fd) DIE("fopen");
     char *line = NULL;
@@ -375,6 +375,7 @@ void editorSave(Editor *e) {
             editorSetStatusMessage(e, "Save aborted");
             return;
         }
+        editorSelectSyntaxHighlight(e);
     }
     int len;
     char *buf = editorRowsToString(e, &len);
@@ -671,22 +672,35 @@ char *editorPrompt(Editor *e, char *prompt, void (*callback)(Editor *, char *, i
 }
 
 void editorUpdateSyntax(Editor *e, Line *line) {
-    (void) e;
     line->hl = realloc(line->hl, line->rlen);
     memset(line->hl, HL_NORMAL, line->rlen);    // Default values for the entire line
+    if (e->syntax == NULL) return;
     int prev_sep = 1;
     int i = 0;
     while (i < line->rlen) {
         char c = line->render[i];
         unsigned char prev_hl = (i > 0) ? line->hl[i - 1] : HL_NORMAL;
-        if ((isdigit(c) && (prev_sep || prev_hl == HL_NUMBER)) || (c == '.' && prev_hl == HL_NUMBER)) {
-            line->hl[i] = HL_NUMBER;
-            i++;
-            prev_sep = 0;
-            continue;
+        if (syntaxGetFlag(e->syntax, HL_HIGHLIGHT_NUMBERS)) {
+            if ((isdigit(c) && (prev_sep || prev_hl == HL_NUMBER)) || (c == '.' && prev_hl == HL_NUMBER)) {
+                line->hl[i] = HL_NUMBER;
+                i++;
+                prev_sep = 0;
+                continue;
+            }
         }
         prev_sep = isSeparator(c);
         i++;
+    }
+}
+
+void editorSelectSyntaxHighlight(Editor *e) {
+    (void) e;
+    e->syntax = NULL;
+    if (e->filename == NULL) return;
+    e->syntax = syntaxFindHighlight(e->filename);
+    int filerow;
+    for (filerow = 0; filerow < e->nrows; filerow++) {
+        editorUpdateSyntax(e, &e->lines[filerow]);
     }
 }
 

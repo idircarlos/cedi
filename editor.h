@@ -1,6 +1,8 @@
 #ifndef EDITOR_H_
 #define EDITOR_H_
 
+#include "syntax.h"
+
 typedef enum {
     K_BACKSPACE = 127,
     K_LEFT = 1000,
@@ -35,6 +37,7 @@ typedef struct {
     char *filename; // File name
     char statusmsg[80];
     time_t statusmsg_time;
+    EditorSyntax *syntax;   // Syntax of the editor
     struct termios orig_termios;    // Termios status
 } Editor;
 
@@ -70,6 +73,7 @@ int editorRowCxToRx(Editor *e, Line *line, int cx);
 int editorRowRxToCx(Editor *e, Line *line, int rx);
 char *editorPrompt(Editor *e, char *prompt, void (*callback)(Editor *, char *, int));
 void editorUpdateSyntax(Editor *e, Line *line);
+void editorSelectSyntaxHighlight(Editor *e);
 
 int getWindowSize(int *rows, int *cols);
 int getCursorPosition(int *rows, int *cols);

@@ -3,7 +3,7 @@
 #include <unistd.h>
 
 #include "editor.h"
-#include "common.h"
+#include "util.h"
 
 // Prototypes
 void disableRawMode();

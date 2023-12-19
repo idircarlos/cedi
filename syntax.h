@@ -18,12 +18,19 @@ typedef struct {
     int r, g, b; 
 } RGBColor;
 
-int syntaxToColor(int hl) {
-    switch (hl) {
-        case HL_NUMBER: return RED;
-        case HL_MATCH: return BLUE;
-        default: return WHITE;
-    }
-}
+
+typedef enum {
+    HL_HIGHLIGHT_NUMBERS = 1<<0
+} SyntaxHLFlag;
+
+typedef struct {
+    char *filetype;
+    char **filematch;
+    SyntaxHLFlag flags;
+} EditorSyntax;
+
+int syntaxToColor(int hl);
+int syntaxGetFlag(EditorSyntax *syntax, SyntaxHLFlag flag);
+EditorSyntax *syntaxFindHighlight(const char *fileExtension);
 
 #endif // SYNTAX_H_
