@@ -17,11 +17,13 @@ typedef enum {
 } EditorKey;
 
 typedef struct {
+    int idx;
     char *chars;
     int len;
     char *render;
     int rlen;
     unsigned char *hl;  // Highlighting
+    int hl_open_comment;
 } Line;
 
 typedef struct {

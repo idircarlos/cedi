@@ -249,7 +249,18 @@ void editorDrawRows(Editor *e, ABuf *ab) {
             int current_color = -1;
             int j;
             for (j = 0; j < len; j++) {
-                if (hl[j] == HL_NORMAL) {
+                if (iscntrl((int)c[j])) {
+                    char sym = (c[j] <= 26) ? '@' + c[j] : '?';
+                    abAppend(ab, "\x1b[7m", 4);
+                    abAppend(ab, &sym, 1);
+                    abAppend(ab, "\x1b[m", 3);
+                    if (current_color != -1) {
+                        char buf[16];
+                        int clen = snprintf(buf, sizeof(buf), "\x1b[%dm", current_color);
+                        abAppend(ab, buf, clen);
+                    }
+                } 
+                else if (hl[j] == HL_NORMAL) {
                     if (current_color != -1) {
                         abAppend(ab, "\x1b[39m", 5);
                         current_color = -1;
@@ -469,6 +480,9 @@ void editorInsertRow(Editor *e, int at, char *s, size_t len) {
     if (at < 0 || at > e->nrows) return;
     e->lines = realloc(e->lines, sizeof(Line) * (e->nrows + 1));
     memmove(&e->lines[at + 1], &e->lines[at], sizeof(Line) * (e->nrows - at));
+    for (int j = at + 1; j <= e->nrows; j++) e->lines[j].idx++;
+
+    e->lines[at].idx = at;
     
     e->lines[at].len = len;
     e->lines[at].chars = malloc(len + 1);
@@ -479,6 +493,7 @@ void editorInsertRow(Editor *e, int at, char *s, size_t len) {
     e->lines[at].rlen = 0;
     e->lines[at].render = NULL;
     e->lines[at].hl = NULL;
+    e->lines[at].hl_open_comment = 0;
     editorUpdateRow(e, &e->lines[at]);
 
     e->nrows++;
@@ -496,6 +511,7 @@ void editorDelRow(Editor *e, int at) {
     if (at < 0 || at >= e->nrows) return;
     editorFreeRow(e, &e->lines[at]);
     memmove(&e->lines[at], &e->lines[at + 1], sizeof(Line) * (e->nrows - at - 1));
+    for (int j = at; j < e->nrows - 1; j++) e->lines[j].idx--;
     e->nrows--;
     e->dirty++;
 }
@@ -675,11 +691,79 @@ void editorUpdateSyntax(Editor *e, Line *line) {
     line->hl = realloc(line->hl, line->rlen);
     memset(line->hl, HL_NORMAL, line->rlen);    // Default values for the entire line
     if (e->syntax == NULL) return;
+
+    char **keywords = e->syntax->keywords;
+    char *scs = e->syntax->singleline_comment_start;
+    char *mcs = e->syntax->multiline_comment_start;
+    char *mce = e->syntax->multiline_comment_end;
+
+    int scs_len = scs ? strlen(scs) : 0;
+    int mcs_len = mcs ? strlen(mcs) : 0;
+    int mce_len = mce ? strlen(mce) : 0;
+
     int prev_sep = 1;
+    int in_string = 0;
+    int in_comment = (line->idx > 0 && e->lines[line->idx - 1].hl_open_comment);
+    
     int i = 0;
     while (i < line->rlen) {
         char c = line->render[i];
         unsigned char prev_hl = (i > 0) ? line->hl[i - 1] : HL_NORMAL;
+
+        if (syntaxGetFlag(e->syntax, HL_HIGHLIGHT_COMMENTS)) {
+            if (scs_len && !in_string && !in_comment) {
+                if (!strncmp(&line->render[i], scs, scs_len)) {
+                    memset(&line->hl[i], HL_SLCOMMENT, line->rlen - i);
+                    break;
+                }
+            }
+            if (mcs_len && mce_len && !in_string) {
+                if (in_comment) {
+                    line->hl[i] = HL_MLCOMMENT;
+                    if (!strncmp(&line->render[i], mce, mce_len)) {
+                        memset(&line->hl[i], HL_MLCOMMENT, mce_len);
+                        i += mce_len;
+                        in_comment = 0;
+                        prev_sep = 1;
+                        continue;
+                    } 
+                    else {
+                        i++;
+                        continue;
+                    }
+                } 
+                else if (!strncmp(&line->render[i], mcs, mcs_len)) {
+                    memset(&line->hl[i], HL_MLCOMMENT, mcs_len);
+                    i += mcs_len;
+                    in_comment = 1;
+                    continue;
+                }
+            }
+        }
+        
+
+        if (syntaxGetFlag(e->syntax, HL_HIGHLIGHT_STRINGS)) {
+            if (in_string) {
+                line->hl[i] = HL_STRING;
+                if (c == '\\' && i + 1 < line->rlen) {
+                    line->hl[i + 1] = HL_STRING;
+                    i += 2;
+                    continue;
+                }
+                if (c == in_string) in_string = 0;
+                i++;
+                prev_sep = 1;
+                continue;
+            } 
+            else {
+                if (c == '"' || c == '\'') {
+                    in_string = c;
+                    line->hl[i] = HL_STRING;
+                    i++;
+                    continue;
+                }
+            }
+        }
         if (syntaxGetFlag(e->syntax, HL_HIGHLIGHT_NUMBERS)) {
             if ((isdigit(c) && (prev_sep || prev_hl == HL_NUMBER)) || (c == '.' && prev_hl == HL_NUMBER)) {
                 line->hl[i] = HL_NUMBER;
@@ -688,9 +772,29 @@ void editorUpdateSyntax(Editor *e, Line *line) {
                 continue;
             }
         }
+        if (prev_sep) {
+            int j;
+            for (j = 0; keywords[j]; j++) {
+                int klen = strlen(keywords[j]);
+                int kw2 = keywords[j][klen - 1] == '|';
+                if (kw2) klen--;
+                if (!strncmp(&line->render[i], keywords[j], klen) && isSeparator(line->render[i + klen])) {
+                    memset(&line->hl[i], kw2 ? HL_KEYWORD2 : HL_KEYWORD1, klen);
+                    i += klen;
+                    break;
+                }
+            }
+            if (keywords[j] != NULL) {
+                prev_sep = 0;
+                continue;
+            }
+        }
         prev_sep = isSeparator(c);
         i++;
     }
+    int changed = (line->hl_open_comment != in_comment);
+    line->hl_open_comment = in_comment;
+    if (changed && line->idx + 1 < e->nrows) editorUpdateSyntax(e, &e->lines[line->idx + 1]);
 }
 
 void editorSelectSyntaxHighlight(Editor *e) {

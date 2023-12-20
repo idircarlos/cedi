@@ -1,12 +1,23 @@
 #include "syntax.h"
 
 static char *C_HL_extensions[] = {".c", ".h", ".cpp", NULL};
+static char *C_HL_keywords[] = {
+  "switch", "if", "while", "for", "break", "continue", "return", "else",
+  "struct", "union", "typedef", "static", "enum", "class", "case",
+
+  "int|", "long|", "double|", "float|", "char|", "unsigned|", "signed|",
+  "void|", NULL
+};
 
 static EditorSyntax HLDB[] = {
   {
     "c",
     C_HL_extensions,
-    HL_HIGHLIGHT_NUMBERS
+    C_HL_keywords,
+    "//",
+    "/*",
+    "*/",
+    HL_HIGHLIGHT_NUMBERS | HL_HIGHLIGHT_STRINGS | HL_HIGHLIGHT_COMMENTS
   },
 };
 
@@ -14,6 +25,11 @@ static EditorSyntax HLDB[] = {
 
 int syntaxToColor(int hl) {
     switch (hl) {
+        case HL_SLCOMMENT:
+        case HL_MLCOMMENT: return CYAN;
+        case HL_KEYWORD1: return GREEN;
+        case HL_KEYWORD2: return YELLOW;
+        case HL_STRING: return MAGENTA; 
         case HL_NUMBER: return RED; 
         case HL_MATCH: return BLUE;
         default: return WHITE;
