@@ -18,6 +18,7 @@
 
 #include "editor.h"
 #include "util.h"
+#include "logger.h"
 
 #define CTRL_KEY(k) ((k) & 0x1f)
 #define ABUF_INIT {NULL, 0}
@@ -53,6 +54,7 @@ void editorInit(Editor *e) {
     e->statusmsg[0] = '\0';
     e->statusmsg_time = 0;
     e->syntax = NULL;
+    LoggerInit("logging.txt", L_ERROR);
     if (getWindowSize(&e->screenrows,  &e->screencols) == -1) DIE("getWindowSize");
     e->screenrows -= 2; // Reserve two lines for the status bars
 }
