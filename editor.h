@@ -5,7 +5,7 @@
 
 typedef enum {
     K_BACKSPACE = 127,
-    K_LEFT = 1000,
+    K_LEFT = 2000,
     K_RIGHT,
     K_UP,
     K_DOWN,
@@ -15,6 +15,11 @@ typedef enum {
     K_PAGE_DOWN,
     K_DEL
 } EditorKey;
+
+typedef enum {
+    K_CONTROL = 1<<0,
+    K_SHIFT = 1<<1
+} ModifierKey;
 
 typedef struct {
     int idx;
@@ -40,6 +45,7 @@ typedef struct {
     char statusmsg[80];
     time_t statusmsg_time;
     EditorSyntax *syntax;   // Syntax of the editor
+    ModifierKey modKeysFlags;  // Keys pressed
     struct termios orig_termios;    // Termios status
 } Editor;
 

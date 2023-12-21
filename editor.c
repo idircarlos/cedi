@@ -14,6 +14,7 @@
 #include <ctype.h>
 #include <errno.h>
 #include <fcntl.h>
+#include <windows.h>
 
 #include "editor.h"
 #include "util.h"
@@ -22,6 +23,22 @@
 #define ABUF_INIT {NULL, 0}
 #define CEDI_QUIT_TIMES 3
 
+static FILE *flog;
+
+void logWrite(char *fmt, ...) {
+    flog = fopen("log.txt", "a");
+    fflush(flog);
+    
+    va_list ap;
+    va_start(ap, fmt);
+    char *buf = calloc(1024, sizeof(char));
+    vsnprintf(buf, 1024, fmt, ap);
+    
+    fwrite(buf, 1, strlen(buf), flog);
+    va_end(ap);
+
+    fclose(flog);
+}
 
 void editorInit(Editor *e) {
     e->cx = 0;
@@ -44,18 +61,20 @@ int editorReadKey(Editor *e) {
     (void) e;
     int nread;
     char c;
+    e->modKeysFlags = 0;    // Reset flags
     while ((nread = read(STDIN_FILENO, &c, 1)) != 1) {
         if (nread == -1 && errno != EAGAIN) DIE("read");
     }
     if (c == '\x1b') {
-        char seq[3];
+        char seq[5];
         if (read(STDIN_FILENO, &seq[0], 1) != 1) return '\x1b';
         if (read(STDIN_FILENO, &seq[1], 1) != 1) return '\x1b';
-
         if (seq[0] == '[') {
             if (seq[1] >= '0' && seq[1] <= '9') {
+                logWrite("1\n");
                 if (read(STDIN_FILENO, &seq[2], 1) != 1) return '\x1b';
                 if (seq[2] == '~') {
+                    logWrite("3\n");
                     switch (seq[1]) {
                         case '1': return K_HOME;
                         case '3': return K_DEL;
@@ -66,8 +85,25 @@ int editorReadKey(Editor *e) {
                         case '8': return K_END;
                     }
                 }
+                // CTRL, SHIFT...
+                else {
+                    if (read(STDIN_FILENO, &seq[3], 1) != 1) return '\x1b';
+                    if (read(STDIN_FILENO, &seq[4], 1) != 1) return '\x1b';
+                    logWrite("%c\n", seq[3]);
+                    e->modKeysFlags |= seq[3] == '5' ? K_CONTROL : 0;
+                    e->modKeysFlags |= seq[3] == '2' ? K_SHIFT : 0;
+                    e->modKeysFlags |= seq[3] == '6' ? (K_CONTROL | K_SHIFT) : 0;
+                    logWrite("flags = %d\n", e->modKeysFlags);
+                    switch (seq[4]) {
+                        case 'A': return K_UP;
+                        case 'B': return K_DOWN;
+                        case 'C': return K_RIGHT;
+                        case 'D': return K_LEFT;
+                    }
+                }
             } 
             else {
+                logWrite("2\n");
                 switch (seq[1]) {
                     case 'A': return K_UP;
                     case 'B': return K_DOWN;

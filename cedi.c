@@ -1,6 +1,7 @@
 #include <stdlib.h>
 #include <termios.h>
 #include <unistd.h>
+#include <errno.h>
 
 #include "editor.h"
 #include "util.h"
