@@ -8,5 +8,7 @@
 
 void die(char *file, int line, char *s);
 int isSeparator(int c);
+char *strchrs(const char* str, const char *char_set, int off, int left_to_right);
+char *strrev(char *str);
 
 #endif // UTIL_H_

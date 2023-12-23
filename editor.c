@@ -50,7 +50,6 @@ int editorReadKey(Editor *e) {
     while ((nread = read(STDIN_FILENO, &c, 1)) != 1) {
         if (nread == -1 && errno != EAGAIN) DIE("read");
     }
-    LOG_ERROR("XD");
     if (c == '\x1b') {
         char seq[5];
         if (read(STDIN_FILENO, &seq[0], 1) != 1) return '\x1b';
@@ -139,14 +138,28 @@ void editorMoveCursor(Editor *e, int key) {
     Line *line = (e->cy >= e->nrows) ? NULL : &e->lines[e->cy];
     switch (key) {
         case K_LEFT:
-            if (e->cx > 0) e->cx--;
+            if (e->cx > 0) {
+                int off = 1;
+                if (e->modKeysFlags & K_CONTROL) {
+                    char *ptr = strchrs(line->chars, " .\t]}+-/;<\"#", e->cx - 2, 0);
+                    off = (ptr != NULL) ? (line->chars + e->cx) - ptr - 1 : 1;
+                }
+                e->cx -= off > 0 ? off : 1;
+            }
             else if (e->cy > 0) {
                 e->cy--;
                 e->cx = e->lines[e->cy].len;
             }
             break;
         case K_RIGHT:
-            if (line && e->cx < line->len) e->cx++;
+            if (line && e->cx < line->len) {
+                int off = 1;
+                if (e->modKeysFlags & K_CONTROL) {
+                    char *ptr = strchrs(line->chars, " .\t[{+-/;>\"#", e->cx + 1, 1);
+                    off = ptr != NULL ? ptr - (line->chars + e->cx) : 1; 
+                }
+                e->cx += off;
+            }
             else if (line && e->cx == line->len) {
                 e->cy++;
                 e->cx = 0;

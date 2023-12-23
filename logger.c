@@ -89,7 +89,7 @@ void LoggerLog(LogLevel level, const char *cfile, int line, char *fmt, ...) {
     memmove(buf, timebuf, strlen(timebuf));
 
     // New line
-    buf[strlen(buf) - 1] = '\n';
+    buf[strlen(buf)] = '\n';
 
     // Writes to the file
     fwrite(buf, sizeof(char), strlen(buf), fd);
