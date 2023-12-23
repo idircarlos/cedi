@@ -6,7 +6,7 @@
 
 #include "logger.h"
 
-#define LOGGER_DEFAULT_TIME_FORMAT "[%d/%m/%Y - %H:%M:%S]"
+#define LOGGER_DEFAULT_TIME_FORMAT "%d/%m/%Y - %H:%M:%S"
 #define LOGGER_MAX_ALLOC_LINE 1024
 
 #define LOGGER_TRACE "TRACE"
@@ -19,24 +19,24 @@
 
 typedef struct {
     char *filename;
-    LoggerLevel level;
+    LogLevel level;
     int initialized;
 } Logger;
 
 static Logger logger = {0};
 
-void LoggerInit(char *logFile, LoggerLevel level) {
+void LoggerInit(char *logFile, LogLevel level) {
     if (logger.initialized == 1) return;
     logger.filename = logFile;
     logger.level = level;
     logger.initialized = 1;
 }
 
-void LoggerSetLevel(LoggerLevel level) {
+void LoggerSetLevel(LogLevel level) {
     logger.level = level;
 }
 
-char *_LoggerLevelToString(LoggerLevel level) {
+char *_LoggerLevelToString(LogLevel level) {
     switch (level) {
         case L_TRACE: return LOGGER_TRACE;
         case L_DEBUG: return LOGGER_DEBUG;
@@ -48,7 +48,8 @@ char *_LoggerLevelToString(LoggerLevel level) {
     return LOGGER_UNKNOWN;
 }
 
-void _LoggerWrite(LoggerLevel level, char *fmt, va_list ap) {
+void LoggerLog(LogLevel level, const char *cfile, int line, char *fmt, ...) {
+    
     if (logger.initialized == 0 || logger.level > level) return;
     FILE *fd = fopen(logger.filename, "a");
     
@@ -62,14 +63,24 @@ void _LoggerWrite(LoggerLevel level, char *fmt, va_list ap) {
     
     // Get level and format
     char *levelbuf = calloc(10, sizeof(char));
-    snprintf(levelbuf, 10, "[%s] ", _LoggerLevelToString(level));
+    snprintf(levelbuf, 10, " [%s]", _LoggerLevelToString(level));
+
+    // Get c-file and line
+    char *file_data = calloc(20, sizeof(char));
+    snprintf(file_data, 20, " %s:%d ", cfile, line);
 
     // Build message and format
+    va_list ap;
+    va_start(ap, fmt);
     char *buf = calloc(LOGGER_MAX_ALLOC_LINE, sizeof(char));
     vsnprintf(buf, LOGGER_MAX_ALLOC_LINE, fmt, ap);
+    va_end(ap);
     
     // Shift message to allocate space for "[TIME][LEVEL] Message..."
-    memmove(buf + strlen(timebuf) + strlen(levelbuf), buf, strlen(buf));
+    memmove(buf + strlen(timebuf) + strlen(levelbuf) + strlen(file_data), buf, strlen(buf));
+    
+    // Shift file data
+    memmove(buf + strlen(timebuf) + strlen(levelbuf), file_data, strlen(file_data));
     
     // Set level
     memmove(buf + strlen(timebuf), levelbuf, strlen(levelbuf));
@@ -82,43 +93,6 @@ void _LoggerWrite(LoggerLevel level, char *fmt, va_list ap) {
 
     // Writes to the file
     fwrite(buf, sizeof(char), strlen(buf), fd);
-    va_end(ap);
     free(buf);
     fclose(fd);
-}
-
-void LoggerTrace(char *fmt, ...) {
-    va_list ap;
-    va_start(ap, fmt);
-    _LoggerWrite(L_TRACE, fmt, ap);
-}
-
-void LoggerDebug(char *fmt, ...) {
-    va_list ap;
-    va_start(ap, fmt);
-    _LoggerWrite(L_DEBUG, fmt, ap);
-}
-
-void LoggerInfo(char *fmt, ...) {
-    va_list ap;
-    va_start(ap, fmt);
-    _LoggerWrite(L_INFO, fmt, ap);
-}
-
-void LoggerWarn(char *fmt, ...) {
-    va_list ap;
-    va_start(ap, fmt);
-    _LoggerWrite(L_WARN, fmt, ap);
-}
-
-void LoggerError(char *fmt, ...) {
-    va_list ap;
-    va_start(ap, fmt);
-    _LoggerWrite(L_ERROR, fmt, ap);
-}
-
-void LoggerFatal(char *fmt, ...) {
-    va_list ap;
-    va_start(ap, fmt);
-    _LoggerWrite(L_FATAL, fmt, ap);
 }
