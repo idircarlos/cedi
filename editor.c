@@ -166,10 +166,16 @@ void editorMoveCursor(Editor *e, int key) {
             }
             break;
         case K_UP:
-            if (e->cy != 0) e->cy--;
+            if ((e->modKeysFlags & K_CONTROL) && e->rowoff > 0) {
+                e->rowoff--;
+            }
+            else if (e->cy != 0) e->cy--;
             break;
         case K_DOWN:
-            if (e->cy < e->nrows) e->cy++;
+            if ((e->modKeysFlags & K_CONTROL) && e->rowoff < e->nrows) {
+                e->rowoff++;
+            }
+            else if (e->cy < e->nrows) e->cy++;
             break;
     }
 
@@ -642,10 +648,20 @@ void editorScroll(Editor *e) {
         e->rx = editorRowCxToRx(e, &e->lines[e->cy], e->cx);
     }
     if (e->cy < e->rowoff) {
-        e->rowoff = e->cy;
+        if (e->modKeysFlags & K_CONTROL) {
+            e->cy = e->rowoff;      // Do not limit scroll and have cy to 0
+        }
+        else {
+            e->rowoff = e->cy;      // Limit scroll to cy
+        } 
     }
     if (e->cy >= e->rowoff + e->screenrows) {
-        e->rowoff = e->cy - e->screenrows + 1;
+        if (e->modKeysFlags & K_CONTROL) {
+            e->cy = e->screenrows + e->rowoff - 1;      // Do not limit scroll and have cy to 0
+        }
+        else {
+            e->rowoff = e->cy - e->screenrows + 1;      // Limit scroll to cy
+        }
     }
     if (e->rx < e->coloff) {
         e->coloff = e->rx;
