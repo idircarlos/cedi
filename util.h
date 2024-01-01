@@ -8,7 +8,10 @@
 
 void die(char *file, int line, char *s);
 int isSeparator(int c);
-char *strchrs(const char* str, const char *char_set, int off, int left_to_right);
+const char *strchrs(const char* str, const char *char_set, const int off);
+const char *strrchrs(const char* str, const char *char_set, const int off);
 char *strrev(char *str);
+// Checks if the cursor x,y its between the limits x1,y1 and x2,y2
+int betweenRange(int x, int y, int x1, int y1, int x2, int y2);
 
 #endif // UTIL_H_

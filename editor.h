@@ -34,6 +34,8 @@ typedef struct {
 typedef struct {
     int cx, cy;     // Cursor x,y
     int rx;         // Cursor render x
+    int sfx, sfy;   // Cursor selected from
+    int stx, sty;   // Cursor selected to
     int rowoff;     // Row offset for scroll
     int coloff;     // Col offset for scroll
     int screenrows; // Editor rows
@@ -82,6 +84,8 @@ int editorRowRxToCx(Editor *e, Line *line, int rx);
 char *editorPrompt(Editor *e, char *prompt, void (*callback)(Editor *, char *, int));
 void editorUpdateSyntax(Editor *e, Line *line);
 void editorSelectSyntaxHighlight(Editor *e);
+void editorCopyText(Editor *e);
+void editorPasteText(Editor *e);
 
 int getWindowSize(int *rows, int *cols);
 int getCursorPosition(int *rows, int *cols);

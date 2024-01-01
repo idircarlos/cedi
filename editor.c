@@ -28,6 +28,10 @@ void editorInit(Editor *e) {
     e->cx = 0;
     e->cy = 0;
     e->rx = 0;
+    e->sfx = -1;
+    e->sfy = -1;
+    e->stx = -1;
+    e->sty = -1;
     e->rowoff = 0;
     e->coloff = 0;
     e->nrows = 0;
@@ -141,8 +145,8 @@ void editorMoveCursor(Editor *e, int key) {
             if (e->cx > 0) {
                 int off = 1;
                 if (e->modKeysFlags & K_CONTROL) {
-                    char *ptr = strchrs(line->chars, " .\t]}+-/;<\"#", e->cx - 2, 0);
-                    off = (ptr != NULL) ? (line->chars + e->cx) - ptr - 1 : 1;
+                    const char *ptr = strrchrs(line->chars, " .\t]}+-/;<\"#", e->cx);
+                    off = (ptr != NULL) ? (line->chars + e->cx) - ptr - 1 : e->cx;  // if no char found, then go to the beggining of the line
                 }
                 e->cx -= off > 0 ? off : 1;
             }
@@ -155,14 +159,32 @@ void editorMoveCursor(Editor *e, int key) {
             if (line && e->cx < line->len) {
                 int off = 1;
                 if (e->modKeysFlags & K_CONTROL) {
-                    char *ptr = strchrs(line->chars, " .\t[{+-/;>\"#", e->cx + 1, 1);
-                    off = ptr != NULL ? ptr - (line->chars + e->cx) : 1; 
+                    const char *ptr = strchrs(line->chars, " .\t[{+-/;>\"", e->cx + 1);
+                    off = ptr != NULL ? ptr - (line->chars + e->cx) : line->len - e->cx; // if no char found, then go to the end of the line
+                }
+                if (e->modKeysFlags & K_SHIFT) {
+                    e->sfx = e->sfx == -1 ? e->rx : e->sfx;
+                    e->sfy = e->sfy == -1 ? e->cy : e->sfy;
+                    e->stx = e->cx + off;
+                    e->sty = e->cy;
+                }
+                else {
+                    e->sfx = -1;
+                    e->sfy = -1;
+                    e->stx = -1;
+                    e->sty = -1;
                 }
                 e->cx += off;
             }
             else if (line && e->cx == line->len) {
                 e->cy++;
                 e->cx = 0;
+                if (e->modKeysFlags & K_SHIFT) {
+                    e->sfx = e->sfx == -1 ? e->rx : e->sfx;
+                    e->sfy = e->sfy == -1 ? e->cy : e->sfy;
+                    e->stx = 0;
+                    e->sty = e->cy;
+                }
             }
             break;
         case K_UP:
@@ -285,6 +307,15 @@ void editorDrawRows(Editor *e, ABuf *ab) {
             int current_color = -1;
             int j;
             for (j = 0; j < len; j++) {
+                // Highlight selected tokens
+                if (e->sfx != -1) {
+                    if (betweenRange(j, y, e->sfx, e->sfy, e->stx, e->sty)) {
+                        abAppend(ab, "\x1b[7m", 4);    // Invert term colors
+                    }
+                    else {
+                        abAppend(ab, "\x1b[m", 3);     // Def term colors
+                    }
+                }               
                 if (iscntrl((int)c[j])) {
                     char sym = (c[j] <= 26) ? '@' + c[j] : '?';
                     abAppend(ab, "\x1b[7m", 4);
@@ -314,8 +345,10 @@ void editorDrawRows(Editor *e, ABuf *ab) {
                     abAppend(ab, &c[j], 1);
                 } 
             }
+            
             abAppend(ab, "\x1b[39m", 5);
         }
+        abAppend(ab, "\x1b[m", 3);     // Def term colors
         abAppend(ab, "\x1b[K", 3);
         abAppend(ab, "\r\n", 2);
     }
@@ -852,6 +885,16 @@ void editorSelectSyntaxHighlight(Editor *e) {
     for (filerow = 0; filerow < e->nrows; filerow++) {
         editorUpdateSyntax(e, &e->lines[filerow]);
     }
+}
+
+void editorCopyText(Editor *e) {
+    (void) e;
+    LOG_DEBUG("Copiando...");
+}
+
+void editorPasteText(Editor *e) {
+    (void) e;
+    LOG_DEBUG("Pegando...");
 }
 
 void abAppend(ABuf *ab, const char *s, int len) {
