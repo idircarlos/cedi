@@ -149,10 +149,31 @@ void editorMoveCursor(Editor *e, int key) {
                     off = (ptr != NULL) ? (line->chars + e->cx) - ptr - 1 : e->cx;  // if no char found, then go to the beggining of the line
                 }
                 e->cx -= off > 0 ? off : 1;
+                if (e->modKeysFlags & K_SHIFT) {
+                    e->sfx = editorRowCxToRx(e, line, e->cx);
+                    e->sfy = e->cy;
+                    e->stx = e->stx == -1 ? e->rx : e->stx;
+                    e->sty = e->sty == -1 ? e->cy : e->sty;
+                }
+                else {
+                    e->sfx = -1;
+                    e->sfy = -1;
+                    e->stx = -1;
+                    e->sty = -1;
+                }
+                LOG_DEBUG("e->cx %d", e->cx);
+                LOG_DEBUG("e->sfx %d", e->sfx);
+                LOG_DEBUG("e->sfy %d", e->sfy);
+                LOG_DEBUG("e->stx %d", e->stx);
+                LOG_DEBUG("e->sty %d", e->sty);
+                
             }
             else if (e->cy > 0) {
                 e->cy--;
                 e->cx = e->lines[e->cy].len;
+                if (e->modKeysFlags & K_SHIFT) {
+                    
+                }
             }
             break;
         case K_RIGHT:
@@ -162,10 +183,11 @@ void editorMoveCursor(Editor *e, int key) {
                     const char *ptr = strchrs(line->chars, " .\t[{+-/;>\"", e->cx + 1);
                     off = ptr != NULL ? ptr - (line->chars + e->cx) : line->len - e->cx; // if no char found, then go to the end of the line
                 }
+                e->cx += off;
                 if (e->modKeysFlags & K_SHIFT) {
                     e->sfx = e->sfx == -1 ? e->rx : e->sfx;
                     e->sfy = e->sfy == -1 ? e->cy : e->sfy;
-                    e->stx = e->cx + off;
+                    e->stx = editorRowCxToRx(e, line, e->cx);
                     e->sty = e->cy;
                 }
                 else {
@@ -174,7 +196,6 @@ void editorMoveCursor(Editor *e, int key) {
                     e->stx = -1;
                     e->sty = -1;
                 }
-                e->cx += off;
             }
             else if (line && e->cx == line->len) {
                 e->cy++;
